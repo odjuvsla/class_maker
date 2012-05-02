@@ -98,13 +98,13 @@ class MemberTableModel(QtCore.QAbstractTableModel):
     def setData(self, index, value, role):
 	if index.row() < len(self.members):
 	    if index.column() == 0:
-	      self.members[index.row()].encapsulation = value
+	      self.members[index.row()].encapsulation = str(value)
 	    if index.column() == 1:
-	      self.members[index.row()].type = value
+	      self.members[index.row()].type = str(value.toString())
 	    if index.column() == 2:
-	      self.members[index.row()].name = value
+	      self.members[index.row()].name = str(value.toString())
 	    if index.column() == 3:
-	      self.members[index.row()].default = value
+	      self.members[index.row()].default = str(value.toString())
 	    self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), index, index);
 	    return True
 	return False
@@ -148,11 +148,13 @@ class MemberTableModel(QtCore.QAbstractTableModel):
 	return True
 
 	  
-class MakeClass:
+class MakeClass(QtCore.QObject):
   '''
   Create a class
   '''
-  def __init__(self,name, inherits=''):
+  def __init__(self, model, name, inherits='', parent=None):
+    
+    QtCore.QObject.__init__(self, parent)
     
     self.name = name
     self.inherits = inherits
@@ -166,6 +168,29 @@ class MakeClass:
     self.createEqualityOp = True
     self.createParameterConstructor = True
     
+    self.model = model
+    
+  def updateFromModel(self, u, b):
+    
+    self.private = []
+    self.public = []
+    self.protected = []
+    for m in self.model.members:
+      if m.encapsulation == 'public':
+	self.public.append(m)
+      if m.encapsulation == 'protected':
+	self.protected.append(m)
+      if m.encapsulation == 'private':
+	self.private.append(m)
+      
+    
+    
+  def setClassName(self, n):
+    self.name = str(n)
+
+  def setInherits(self, i):
+    self.inherits = str(i)
+  
   def setPublicMembers(self, members):
     self.public = members
     
@@ -182,6 +207,12 @@ class MakeClass:
       return ' _' + member.name + '(' + member.name + ')\n'
     else:
       return ',_' + member.name + '(' + member.name + ')\n'
+
+  def getInitListArgCopy(self, member, source, first = False):
+    if first:
+      return ' _' + member.name + '(' + source + '._' + member.name + ')\n'
+    else:
+      return ',_' + member.name + '(' + source + '._' + member.name + ')\n'
 
   def getInitListArgZero(self, member, first = False):
     if first:
@@ -214,7 +245,11 @@ class MakeClass:
 	content = '//! Default constructor\n'
 	content += self.name + '();\n\n'
       else:
-	content = self.name + '::' + self.name + '() : \n'
+	content = self.name + '::' + self.name + '()'
+	if (len(self.public) + len(self.protected) + len(self.private)) > 0:
+	  content += ' :\n'
+	else:
+	  content += '\n'
 	firstMember = True
 	for m in self.public:
 	  content += self.getInitListArgZero(m, firstMember)
@@ -251,7 +286,11 @@ class MakeClass:
 	for m in self.private:
 	  content += self.getFunctionArg(m)
 	content = content.rstrip(', ')
-	content += ') :\n'
+	content += ')'
+	if (len(self.public) + len(self.protected) + len(self.private)) > 0:
+	  content += ' :\n'
+	else:
+	  content += '\n'
 	firstMember = True
 	for m in self.public:
 	  content += self.getInitListArg(m, firstMember)
@@ -267,81 +306,130 @@ class MakeClass:
   
   def getCopyConstructor(self, impl = False):
       content = '//! Copy constructor\n'
-      content += self.name + '(const ' + self.name + ' &obj);\n\n'
+      if impl == False:
+	content += self.name + '(const ' + self.name + ' &obj);\n\n'
+      else:
+	content += self.name + '::' + self.name + '(const ' + self.name + ' &obj)'
+	if (len(self.public) + len(self.protected) + len(self.private)) > 0:
+	  content += ' :\n'
+	else:
+	  content += '\n'
+	firstMember = True
+	for m in self.public:
+	  content += self.getInitListArgCopy(m, 'obj',firstMember)
+	  firstMember = False
+	for m in self.protected:
+	  content += self.getInitListArgCopy(m, 'obj',firstMember)
+	  firstMember = False
+	for m in self.private:
+	  content += self.getInitListArgCopy(m, 'obj',firstMember)
+	  firstMember = False
+	content += '{}\n\n'
       return content
   
   def getDestructor(self, impl = False):
       content = '//! Destructor\n'
-      content += 'virtual ~' + self.name + ';\n\n'
+      content += 'virtual ' + self.name + '::~' + self.name + '\n' + '{}' + '\n\n'
       return content
 
   def getAssignmentOp(self, impl = False):
+      
       content = '//! Assignment operator\n'
-      content += self.name + '& operator=(const ' + self.name + '& obj);\n\n'
+      if impl == False:
+	content += self.name + '& operator=(const ' + self.name + '& other);\n\n'
+      else:
+	content += self.name + '& ' + self.name + '::operator=(const ' + self.name + ' &other)\n{\n'
+	content += 'if (this != &other)\n'
+	content += '{\n'
+	for m in self.public:
+	  content += '_'+m.name + ' = other._'+m.name + ';\n'
+	for m in self.protected:
+	  content += '_'+m.name + ' = other._'+m.name + ';\n'
+	for m in self.private:
+	  content += '_'+m.name + ' = other._'+m.name + ';\n'
+	content += '}\n'
+	content += '}\n\n'
       return content
       
   def getEqualityOp(self, impl = False):
       content = '//! Equality operator\n'
-      content += 'bool operator==(const ' + self.name + ' &obj) const;\n\n'
+      if impl == False:
+	content += 'bool operator==(const ' + self.name + ' &other) const;\n\n'
+      else:
+	content += 'bool ' + self.name + '::operator==(const ' + self.name + ' &other)\n{\n'
+	content += 'if (this == &other) return true;\n'
+	content += 'else if\n'
+	content += '(\n'
+	for m in self.public:
+	  content += '_'+m.name + ' == other._'+m.name + ' &&\n'
+	for m in self.protected:
+	  content += '_'+m.name + ' == other._'+m.name + ' &&\n'
+	for m in self.private:
+	  content += '_'+m.name + ' == other._'+m.name + ' &&\n'
+	content = content.rstrip('&&\n')
+	content += '\n)\n'
+	content += '{\n'
+	content += 'return true;\n'
+	content += '}\n'
+	content += 'return false;\n'
+	content += '}\n\n'
+      
       return content
 
   def generateDefaultConstructorDef(self):
-    
-      return self.getDefaultConstructor()
+      
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getDefaultConstructor())
   
   def generateParameterConstructorDef(self):
     
-      return self.getParameterConstructor()
-  		
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getParameterConstructor())
+      
   def generateCopyConstructorDef(self):
-      content = '//! Copy constructor\n'
-      content += self.name + '(const ' + self.name + ' &obj);\n\n'
-      return content
-  
+      
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getCopyConstructor()())
+      
+      
   def generateDestructorDef(self):
-      content = '//! Destructor\n'
-      content += 'virtual ~' + self.name + ';\n\n'
-      return content
 
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getDestructor())
+      
   def generateAssignmentOpDef(self):
-      content = '//! Assignment operator\n'
-      content += self.name + '& operator=(const ' + self.name + '& obj);\n\n'
-      return content
+
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getAssignmentOp())
       
   def generateEqualityOpDef(self):
-      content = '//! Equality operator\n'
-      content += 'bool operator==(const ' + self.name + ' &obj) const;\n\n'
-      return content
-  
+
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getEqualityOp())
+      
   def generateDefaultConstructorImpl(self):
-    
-      return self.getDefaultConstructor(True)
-  
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getDefaultConstructor(True))
+      
   def generateParameterConstructorImpl(self):
-      content = self.getParameterConstructor(True)
-      print content
-      return content
-  		
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getParameterConstructor(True))
+      
   def generateCopyConstructorImpl(self):
-      content = '//! Copy constructor\n'
-      content += self.name + '(const ' + self.name + ' &obj);\n\n'
-      return content
-  
+
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getCopyConstructor(True))
+      
   def generateDestructorImpl(self):
-      content = '//! Destructor\n'
-      content += 'virtual ~' + self.name + ';\n\n'
-      return content
+    
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getDestructor(True))
 
   def generateAssignmentOpImpl(self):
-      content = '//! Assignment operator\n'
-      content += self.name + '& operator=(const ' + self.name + '& obj);\n\n'
-      return content
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getAssignmentOp(True))
       
   def generateEqualityOpImpl(self):
-      content = '//! Equality operator\n'
-      content += 'bool operator==(const ' + self.name + ' &obj) const;\n\n'
-      return content
+      
+      self.emit(QtCore.SIGNAL('generatedCode'), self.getEqualityOp(True))
     
+  def generateGetter(self, m):
+    
+      return m.type + ' ' + m.name + '() const { return _' + m.name +'; }\n' 
+  
+  def generateSetter(self, m):
+    
+      return 'void set' + m.name.capitalize() + '(' + m.type + ' ' + m.name + ') { _' + m.name + ' = ' + m.name + '; }\n' 
+      
   def generateHeaderFile(self):
     
       content = '#ifndef ' + self.name.upper() + '_H\n'
@@ -364,41 +452,81 @@ class MakeClass:
 	content += self.getAssignmentOp()
       if self.createEqualityOp:
 	content += self.getEqualityOp()
-      content += '// Getters\n\n'
+      
+      if len(self.protected) > 0 or len(self.private) > 0:
+	content += '// Getters\n\n'
       for m in self.protected:
-	content += m.type + ' ' + m.name + '() const { return _' + m.name +'; }\n\n' 
+	#content += m.type + ' ' + m.name + '() const { return _' + m.name +'; }\n\n' 
+	content += self.generateGetter(m)
+	content+= '\n'
       for m in self.private:
-	content += m.type + ' ' + m.name + '() const { return _' + m.name +'; }\n\n' 
-      content += '// Setters\n\n'
+	#content += m.type + ' ' + m.name + '() const { return _' + m.name +'; }\n\n' 
+	content += self.generateGetter(m)
+	content += '\n'
+      if len(self.protected) > 0 or len(self.private) > 0:
+	content += '// Setters\n\n'
       for m in self.protected:
-	content += 'void set' + m.name.capitalize() + '(' + m.type + ' ' + m.name + ') { _' + m.name + ' = ' + m.name + '; }\n\n' 
+	#content += 'void set' + m.name.capitalize() + '(' + m.type + ' ' + m.name + ') { _' + m.name + ' = ' + m.name + '; }\n\n' 
+	content += self.generateSetter(m)
+	content += '\n'
       for m in self.private:
-	content += 'void set' + m.name.capitalize() + '(' + m.type + ' ' + m.name + ') { _' + m.name + ' = ' + m.name + '; }\n\n'
-	
+	#content += 'void set' + m.name.capitalize() + '(' + m.type + ' ' + m.name + ') { _' + m.name + ' = ' + m.name + '; }\n\n'
+	content += self.generateSetter(m)
+	content += '\n'
       for m in self.public:
 	content += '//! ' + m.name + '\n'
 	content += m.type + ' _' + m.name + ';\n'
-      content += '\nprotected:\n\n'
+      if len(self.protected) > 0:
+	content += '\nprotected:\n\n'
       for m in self.protected:
 	content += '//! ' + m.name + '\n'
 	content += m.type + ' _' + m.name + ';\n'
-      content += '\nprivate:\n\n'
+      if len(self.private) > 0:
+	content += '\nprivate:\n\n'
       for m in self.private:
 	content += '//! ' + m.name + '\n'
 	content += m.type + ' _' + m.name + ';\n'
-      
+      if (self.createDefaultConstructor == False or self.createParameterConstructor == False or self.createCopyConstructor == False or self.createAssignmentOp == False or self.createEqualityOp == False):
+	if len(self.private) == 0:
+	  content += '\nprivate:\n\n'
+      if self.createDefaultConstructor == False:
+	content += '// Prohibited\n'
+	content += self.getDefaultConstructor()
+      if self.createParameterConstructor == False:
+	content += '// Prohibited\n'
+	content += self.getParameterConstructor()
+      if self.createCopyConstructor == False:
+	content += '// Prohibited\n'
+	content += self.getCopyConstructor()
+      if self.createAssignmentOp == False:
+	content += '// Prohibited\n'
+	content += self.getAssignmentOp()
+      if self.createEqualityOp == False:
+	content += '// Prohibited\n'
+	content += self.getEqualityOp()
       content += '};\n\n'
-      content += '#endif //' + self.name.upper() + '_H'
-      print content
+      content += '#endif //' + self.name.upper() + '_H\n\n'
       
+      self.emit(QtCore.SIGNAL('generatedCode'), content)
+
   def generateImplementationFile(self):
       
       content = self.license
       content += '\n'
       content += '#include \"' + self.name.lower() + '.h\"\n\n'
-      content += self.getDefaultConstructor(True)
-      content += self.getParameterConstructor(True)
-      print content
+      if self.createDefaultConstructor:
+	content += self.getDefaultConstructor(True)
+      if self.createParameterConstructor:
+	content += self.getParameterConstructor(True)
+      if self.createCopyConstructor:
+	content += self.getCopyConstructor(True)
+      content += self.getDestructor(True)
+      if self.createAssignmentOp:
+	content += self.getAssignmentOp(True)
+      if self.createEqualityOp:
+	content += self.getEqualityOp(True)
+
+      self.emit(QtCore.SIGNAL('generatedCode'), content)
       
 #c = myclass('test', 'ptest')
 #c.setPublicMembers([member('float', 'a'), member('float', 'b'), member('char*', 'c')])

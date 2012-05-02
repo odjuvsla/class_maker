@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>909</width>
-    <height>815</height>
+    <height>841</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,7 +28,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QLineEdit" name="lineEdit"/>
+       <widget class="QLineEdit" name="classNameEdit"/>
       </item>
       <item>
        <spacer name="horizontalSpacer">
@@ -51,7 +51,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QLineEdit" name="lineEdit_2"/>
+       <widget class="QLineEdit" name="inheritsEdit"/>
       </item>
       <item>
        <spacer name="horizontalSpacer_2">
@@ -67,14 +67,14 @@
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="genDefPb">
         <property name="text">
          <string>Definition</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_7">
+       <widget class="QPushButton" name="genImplPb">
         <property name="text">
          <string>Implementation</string>
         </property>
@@ -285,7 +285,7 @@
      </spacer>
     </item>
     <item>
-     <widget class="QPlainTextEdit" name="plainTextEdit">
+     <widget class="QPlainTextEdit" name="genOutputText">
       <property name="minimumSize">
        <size>
         <width>0</width>
@@ -301,18 +301,6 @@
      </widget>
     </item>
    </layout>
-   <zorder>memberView</zorder>
-   <zorder>horizontalLayoutWidget</zorder>
-   <zorder>lineEdit_2</zorder>
-   <zorder>verticalLayoutWidget</zorder>
-   <zorder>defConPbDef</zorder>
-   <zorder>paramConPbDef</zorder>
-   <zorder>copyConPbDef</zorder>
-   <zorder>assOpPbDef</zorder>
-   <zorder>eqOpPbDef</zorder>
-   <zorder>plainTextEdit</zorder>
-   <zorder>addRowPb</zorder>
-   <zorder>removeRowPb</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -320,7 +308,7 @@
      <x>0</x>
      <y>0</y>
      <width>909</width>
-     <height>24</height>
+     <height>19</height>
     </rect>
    </property>
   </widget>

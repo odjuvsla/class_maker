@@ -18,8 +18,9 @@ class ClassMaker(QtGui.QMainWindow):
   def __init__(self):
     QtGui.QMainWindow.__init__(self)
     
-    self.mc = make_class.MakeClass('test')
     self.mt = make_class.MemberTableModel()
+    
+    self.mc = make_class.MakeClass(self.mt,'')
     
     self.setupUi()
     
@@ -34,6 +35,14 @@ class ClassMaker(QtGui.QMainWindow):
     self.setupSignals()
     
   def setupSignals(self):
+    
+    self.connect(self.mt, QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), self.mc.updateFromModel )
+    
+    self.connect(self.window.classNameEdit, QtCore.SIGNAL("textChanged(const QString&)"), self.mc.setClassName )
+    self.connect(self.window.inheritsEdit, QtCore.SIGNAL("textChanged(const QString&)"), self.mc.setInherits )
+
+    self.connect(self.window.genDefPb, QtCore.SIGNAL("clicked()"), self.mc.generateHeaderFile )
+    self.connect(self.window.genImplPb, QtCore.SIGNAL("clicked()"), self.mc.generateImplementationFile )
     
     self.connect(self.window.defConCb, QtCore.SIGNAL("stateChanged(int)"), self.mc.setCreateDefaultConstructor )
     self.connect(self.window.paramConCb, QtCore.SIGNAL("stateChanged(int)"), self.mc.setCreateParameterConstructor )
@@ -55,6 +64,8 @@ class ClassMaker(QtGui.QMainWindow):
     
     self.connect(self.window.addRowPb, QtCore.SIGNAL("clicked()"), self.addRow)
     self.connect(self.window.removeRowPb, QtCore.SIGNAL("clicked()"), self.removeRow)
+    
+    self.connect(self.mc, QtCore.SIGNAL('generatedCode'), self.window.genOutputText.insertPlainText)
     
   def addRow(self):
     
